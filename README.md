@@ -1,6 +1,22 @@
 # T301735
 What's in a name? Task 2
 
+## Environment
+
+### Pywikibot
+
+There's a tested example of environment setting in `user-config.py` in the pywikibot folder:
+
+```python
+family = 'wikidata'
+mylang = 'wikidata'
+usernames['wikidata']['wikidata'] = 'ExampleBot'
+password_file = "user-password.py"
+console_encoding = 'utf-8'
+```
+
+if using BotPassword, you will have to config `user-password.py` file.
+
 ## Task script
 
 ### Source code
@@ -8,7 +24,7 @@ What's in a name? Task 2
 
 ### Instructions
 
-This is an iterative script, you will have to input some information to the script, including the mandatory fields:
+This is an interactive script, you will have to input some information to the script, including the mandatory fields:
 
 - Data site
 - User
