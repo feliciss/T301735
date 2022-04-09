@@ -1,10 +1,40 @@
 # Example bot for T301735 (https://phabricator.wikimedia.org/T301735) task
 # (C) Feliciss, task completed on 03-April-2022
 
-import pywikibot
-from pywikibot import exception, ItemPage, Site, User
+from pywikibot import exception, ItemPage, Site, User, PropertyPage
 from pywikibot.site import DataSite
-from pywikibot.exceptions import OtherPageSaveError
+from pywikibot.exceptions import OtherPageSaveError, InvalidTitleError
+
+
+# get_property_values_from_an_item
+def get_property_values_from_an_item(data_site, item, prop, label, language) -> list:
+    # get item page
+    item_page = ItemPage(data_site, item)
+    # construct list of multiple property values
+    values = []
+    for item in item_page.claims[prop]:
+        target = item.getTarget()
+        title = target.title()
+        itm_page = ItemPage(data_site, title)
+        value = itm_page.get()[label][language]
+        values.append(value)
+    return values
+
+
+# get_qualifiers_from_a_claim
+def get_qualifiers_from_a_claim(data_site, claim, label, language) -> (list, list):
+    qualifiers = claim.qualifiers
+    names = []
+    targets = []
+    for qualifier in qualifiers:
+        for claim in qualifiers[qualifier]:
+            claim_id = claim.getID()
+            property_page = PropertyPage(data_site, claim_id)
+            name = property_page.get()[label][language]
+            target = claim.getTarget()
+            names.append(name)
+            targets.append(target)
+    return names, targets
 
 
 class T301735Bot:
@@ -81,33 +111,32 @@ class T301735Bot:
         return page_titles
 
     # print_property_value_from_a_page: now only supports printing author names on Wikidata items page
-    def print_property_value_from_a_page(self, page_titles, property_key, linked_property_key, label_key,
-                                         language_key) -> None:
+    def print_property_value_from_a_page(self, items, properties, label,
+                                         language) -> None:
         # get data site
         data_site = self.get_data_site()
         # code refers to https://www.wikidata.org/wiki/Wikidata:Creating_a_bot#Example_11:_Get_values_of_sub-properties
         # and https://github.com/mpeel/wikicode/blob/master/example.py
-        for title in page_titles:
-            item = ItemPage(data_site, title)
-            if property_key in item.claims:
-                for property in item.claims[property_key]:
-                    target = property.getTarget()
-                    title = target.title()
-                    print(title)
-            if linked_property_key in item.claims:
-                for property in item.claims[linked_property_key]:
-                    target = property.getTarget()
-                    title = target.title()
-                    item = ItemPage(data_site, title)
-                    label = item.get()[label_key]
-                    if language_key:
+        for item in items:
+            item_page = ItemPage(data_site, item)
+            for prop in properties:
+                if prop in item_page.claims:
+                    for claim in item_page.claims[prop]:
+                        target = claim.getTarget()
+                        names, targets = get_qualifiers_from_a_claim(data_site, claim, label, language)
                         try:
-                            language = label[language_key]
-                            print(language)
-                        except KeyError:
-                            exception()
-                    else:
-                        print(label)
+                            given_name_property = 'P735'
+                            family_name_property = 'P734'
+                            title = target.title()
+                            given_name = get_property_values_from_an_item(data_site, title, given_name_property, label,
+                                                                          language)
+                            family_name = get_property_values_from_an_item(data_site, title, family_name_property,
+                                                                           label,
+                                                                           language)
+                            for name, target in zip(names, targets):
+                                print('Given Name:', *given_name, 'Family Name:', *family_name, (name, target))
+                        except InvalidTitleError:
+                            print(target, (*names, *targets))
 
 
 def main(*args: str) -> None:
@@ -129,30 +158,43 @@ def main(*args: str) -> None:
     # set submit summary
     summary = input('\nPlease leave the summary you would like to submit (default: submit by script): ') or 'submit by ' \
                                                                                                             'script '
-    # # add content to a user
+
+    # add content to a user
     bot.add_content_to_a_user(text, summary)
 
     # set data type on Wikidata
     wikidata_data_type = input('\nPlease enter a data type on Wikidata, example: Q, P (default: Q): ') or 'Q'
 
-    # search data from a user
-    page_titles = bot.search_data_from_a_user(wikidata_data_type)
+    # determine if the user wants to import user page
+    select = str(input('\nImport the user\'s Wikidata page to find items (y/n)? ').lower().strip()) or 'y'
+    items = []
+    if select == 'y':
+        # search data from a user
+        page_titles = bot.search_data_from_a_user(wikidata_data_type)
+        items.extend(page_titles)
+    else:
+        # input custom items
+        items.extend([str(i) for i in (
+            input('\nPlease enter custom item(s) on Wikidata, example: Q106200605 Q56943026: ').split())])
 
-    # print page titles
-    print(page_titles)
+    # print the items
+    print(items)
 
-    # set property, linked property, label and language as keys to find the values on page
-    property_key, linked_property_key, label_key = [str(i) for i in (
-            input('\nPlease enter property, linked property, label '
-                  'and language (optional) as keys used on Wikidata, '
-                  'example (default): P2093 P50 labels: ') or 'P2093 P50 labels').split()]
+    # set properties as keys to find the values on page
+    properties = [str(i) for i in (input(
+        '\nPlease enter the properties you wish to find, example (default): P2093 P50: ') or 'P2093 P50').split()]
 
-    # set optional language as key to find the values on page
-    language_key = input('Please enter language (optional) as key used on Wikidata, example: en, de, fr: ')
+    # print the properties
+    print(properties)
+
+    # set label as a key to find the values on page
+    label = input('\nPlease enter the label you wish to find, example (default): labels: ') or 'labels'
+
+    # set language as key to find the values on page
+    language = input('\nPlease enter language as key used on Wikidata, example (default): en: ') or 'en'
 
     # print property value from a page
-    bot.print_property_value_from_a_page(page_titles, property_key, linked_property_key, label_key,
-                                                   language_key)
+    bot.print_property_value_from_a_page(items, properties, label, language)
 
 
 if __name__ == '__main__':
