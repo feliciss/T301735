@@ -22,7 +22,7 @@ def get_property_values_from_an_item(data_site, item, prop, label, language) -> 
 
 
 # get_qualifiers_from_a_claim
-def get_qualifiers_from_a_claim(data_site, claim, label, language) -> (list, list):
+def get_qualifiers_from_a_claim(data_site, claim, label, language) -> tuple:
     qualifiers = claim.qualifiers
     names = []
     targets = []
@@ -133,10 +133,10 @@ class T301735Bot:
                             family_name = get_property_values_from_an_item(data_site, title, family_name_property,
                                                                            label,
                                                                            language)
-                            for name, target in zip(names, targets):
-                                print('Given Name:', *given_name, 'Family Name:', *family_name, (name, target))
+                            print('Given Name:', *given_name, 'Family Name:', *family_name, dict(zip(names, targets))
+                                  if names else '')
                         except InvalidTitleError:
-                            print(target, (*names, *targets))
+                            print(target, dict(zip(names, targets)) if names else '')
 
 
 def main(*args: str) -> None:
